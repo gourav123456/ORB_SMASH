@@ -1,0 +1,3791 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Galaxy Siege - Shockwave Assault</title>
+
+<style>
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html,
+body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #020611;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+body {
+    user-select: none;
+}
+
+canvas {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    cursor: crosshair;
+    touch-action: none;
+}
+
+/* =========================
+   HUD
+========================= */
+
+#hud {
+    position: fixed;
+    top: 15px;
+    left: 15px;
+    right: 15px;
+
+    display: flex;
+    justify-content: space-between;
+
+    pointer-events: none;
+    z-index: 10;
+}
+
+.hudCard {
+    min-width: 125px;
+
+    padding: 10px 16px;
+
+    border-radius: 12px;
+
+    border: 1px solid rgba(103, 190, 255, 0.55);
+
+    background: rgba(4, 14, 35, 0.75);
+
+    box-shadow:
+        0 10px 30px rgba(0,0,0,0.55),
+        inset 0 0 25px rgba(40,140,255,0.08);
+
+    backdrop-filter: blur(8px);
+}
+
+.hudLabel {
+    color: #8fbfe9;
+    font-size: 10px;
+    letter-spacing: 2px;
+}
+
+.hudValue {
+    color: white;
+    margin-top: 4px;
+    font-size: 24px;
+    font-weight: bold;
+}
+
+/* =========================
+   INSTRUCTIONS
+========================= */
+
+#instructions {
+
+    position: fixed;
+
+    bottom: 15px;
+    left: 50%;
+
+    transform: translateX(-50%);
+
+    width: min(850px, 90vw);
+
+    padding: 10px 16px;
+
+    border-radius: 12px;
+
+    text-align: center;
+
+    color: #d7e8ff;
+
+    font-size: 12px;
+
+    background: rgba(0,0,0,0.45);
+
+    border:
+        1px solid
+        rgba(130,200,255,0.18);
+
+    pointer-events: none;
+}
+
+/* =========================
+   OVERLAY
+========================= */
+
+#overlay {
+
+    position: fixed;
+
+    inset: 0;
+
+    display: none;
+
+    align-items: center;
+    justify-content: center;
+
+    background: rgba(0,0,0,0.68);
+
+    backdrop-filter: blur(7px);
+
+    z-index: 20;
+}
+
+#panel {
+
+    width: min(450px, 90vw);
+
+    padding: 32px;
+
+    text-align: center;
+
+    border-radius: 22px;
+
+    background:
+        linear-gradient(
+            145deg,
+            rgba(24,45,82,0.98),
+            rgba(4,9,22,0.98)
+        );
+
+    border:
+        1px solid
+        rgba(100,190,255,0.6);
+
+    box-shadow:
+        0 25px 80px
+        rgba(0,0,0,0.85);
+}
+
+#panel h1 {
+
+    color: white;
+
+    margin-bottom: 12px;
+
+    font-size: 32px;
+}
+
+#panel p {
+
+    color: #b9cde5;
+
+    line-height: 1.6;
+
+    margin-bottom: 20px;
+}
+
+button {
+
+    padding: 11px 22px;
+
+    border-radius: 10px;
+
+    border: 1px solid #64baff;
+
+    color: white;
+
+    font-weight: bold;
+
+    cursor: pointer;
+
+    background:
+        linear-gradient(
+            135deg,
+            #2569aa,
+            #102a47
+        );
+
+    transition: 0.2s;
+}
+
+button:hover {
+
+    transform: translateY(-2px);
+
+    filter: brightness(1.2);
+
+    box-shadow:
+        0 0 20px
+        rgba(100,190,255,0.4);
+}
+
+@media (max-width: 650px) {
+
+    .hudCard {
+
+        min-width: 80px;
+
+        padding: 7px 10px;
+    }
+
+    .hudValue {
+
+        font-size: 18px;
+    }
+
+    #instructions {
+
+        font-size: 10px;
+    }
+}
+
+</style>
+</head>
+
+<body>
+
+<canvas id="game"></canvas>
+
+<div id="hud">
+
+    <div class="hudCard">
+        <div class="hudLabel">SCORE</div>
+        <div class="hudValue" id="score">0</div>
+    </div>
+
+    <div class="hudCard">
+        <div class="hudLabel">ENEMIES</div>
+        <div class="hudValue" id="enemyCount">0</div>
+    </div>
+
+    <div class="hudCard">
+        <div class="hudLabel">ORBS</div>
+        <div class="hudValue" id="shots">5</div>
+    </div>
+
+</div>
+
+<div id="instructions">
+    Drag the plasma orb backward to aim • Release to launch • Press SPACE while airborne to trigger a massive shockwave • R to restart
+</div>
+
+<div id="overlay">
+
+    <div id="panel">
+
+        <h1 id="panelTitle">
+            Mission Complete
+        </h1>
+
+        <p id="panelText"></p>
+
+        <button id="restartButton">
+            Restart Mission
+        </button>
+
+    </div>
+
+</div>
+
+
+<script>
+
+"use strict";
+
+
+/* =========================================================
+   CANVAS
+========================================================= */
+
+const canvas =
+    document.getElementById("game");
+
+const ctx =
+    canvas.getContext("2d");
+
+
+let W = 0;
+let H = 0;
+
+let DPR = 1;
+
+let groundY = 0;
+
+
+/* =========================================================
+   DOM
+========================================================= */
+
+const scoreEl =
+    document.getElementById("score");
+
+const enemyCountEl =
+    document.getElementById("enemyCount");
+
+const shotsEl =
+    document.getElementById("shots");
+
+const overlay =
+    document.getElementById("overlay");
+
+const panelTitle =
+    document.getElementById("panelTitle");
+
+const panelText =
+    document.getElementById("panelText");
+
+const restartButton =
+    document.getElementById("restartButton");
+
+
+/* =========================================================
+   CONSTANTS
+========================================================= */
+
+const GRAVITY = 1250;
+
+const FIXED_STEP =
+    1 / 120;
+
+const MAX_STEPS = 8;
+
+
+/* =========================================================
+   GAME STATE
+========================================================= */
+
+let bodies = [];
+
+let particles = [];
+
+let shockwaves = [];
+
+let stars = [];
+
+let projectile = null;
+
+let score = 0;
+
+let shots = 5;
+
+let dragging = false;
+
+let shockwaveUsed = false;
+
+let gameOver = false;
+
+let waitingForNextOrb = false;
+
+let lastTime = 0;
+
+let accumulator = 0;
+
+
+/* =========================================================
+   SCREEN SHAKE
+========================================================= */
+
+let screenShake = 0;
+
+
+/* =========================================================
+   SLINGSHOT
+========================================================= */
+
+const sling = {
+
+    x: 150,
+
+    y: 0,
+
+    /* Increased pull distance */
+
+    maxStretch: 190
+};
+
+
+/* =========================================================
+   RESIZE
+========================================================= */
+
+function resize() {
+
+    DPR =
+        Math.min(
+            window.devicePixelRatio || 1,
+            2
+        );
+
+    W = window.innerWidth;
+
+    H = window.innerHeight;
+
+    canvas.width =
+        W * DPR;
+
+    canvas.height =
+        H * DPR;
+
+    canvas.style.width =
+        W + "px";
+
+    canvas.style.height =
+        H + "px";
+
+    ctx.setTransform(
+        DPR,
+        0,
+        0,
+        DPR,
+        0,
+        0
+    );
+
+    groundY =
+        H - 70;
+
+    sling.y =
+        groundY - 75;
+
+    createStars();
+}
+
+
+window.addEventListener(
+    "resize",
+    resize
+);
+
+resize();
+
+
+/* =========================================================
+   HELPERS
+========================================================= */
+
+function clamp(value, min, max) {
+
+    return Math.max(
+        min,
+        Math.min(max, value)
+    );
+}
+
+
+function random(min, max) {
+
+    return (
+        min +
+        Math.random() *
+        (max - min)
+    );
+}
+
+
+/* =========================================================
+   STARS
+========================================================= */
+
+function createStars() {
+
+    stars = [];
+
+    const count =
+        Math.max(
+            100,
+            Math.floor(
+                W * H / 12000
+            )
+        );
+
+    for (
+        let i = 0;
+        i < count;
+        i++
+    ) {
+
+        stars.push({
+
+            x:
+                Math.random() * W,
+
+            y:
+                Math.random() *
+                H *
+                0.78,
+
+            size:
+                random(
+                    0.5,
+                    2
+                ),
+
+            alpha:
+                random(
+                    0.25,
+                    1
+                ),
+
+            phase:
+                Math.random() *
+                Math.PI *
+                2
+        });
+    }
+}
+
+
+/* =========================================================
+   AUDIO
+========================================================= */
+
+let audioContext =
+    null;
+
+
+function enableAudio() {
+
+    if (!audioContext) {
+
+        const AudioClass =
+            window.AudioContext ||
+            window.webkitAudioContext;
+
+        if (!AudioClass) return;
+
+        audioContext =
+            new AudioClass();
+    }
+
+    if (
+        audioContext.state ===
+        "suspended"
+    ) {
+
+        audioContext.resume();
+    }
+}
+
+
+function playTone(
+    startFrequency,
+    endFrequency,
+    duration,
+    type,
+    volume
+) {
+
+    if (!audioContext) return;
+
+    const oscillator =
+        audioContext.createOscillator();
+
+    const gain =
+        audioContext.createGain();
+
+    oscillator.type =
+        type;
+
+    oscillator.frequency.setValueAtTime(
+        startFrequency,
+        audioContext.currentTime
+    );
+
+    oscillator.frequency.exponentialRampToValueAtTime(
+        Math.max(
+            1,
+            endFrequency
+        ),
+        audioContext.currentTime +
+        duration
+    );
+
+    gain.gain.setValueAtTime(
+        volume,
+        audioContext.currentTime
+    );
+
+    gain.gain.exponentialRampToValueAtTime(
+        0.001,
+        audioContext.currentTime +
+        duration
+    );
+
+    oscillator.connect(gain);
+
+    gain.connect(
+        audioContext.destination
+    );
+
+    oscillator.start();
+
+    oscillator.stop(
+        audioContext.currentTime +
+        duration
+    );
+}
+
+
+/* Launch */
+
+function launchSound() {
+
+    playTone(
+        120,
+        700,
+        0.22,
+        "sine",
+        0.11
+    );
+}
+
+
+/* Impact */
+
+function hitSound() {
+
+    playTone(
+        120,
+        60,
+        0.09,
+        "square",
+        0.05
+    );
+}
+
+
+/* Explosion */
+
+function explosionSound() {
+
+    playTone(
+        150,
+        25,
+        0.45,
+        "sawtooth",
+        0.13
+    );
+}
+
+
+/* Massive shockwave */
+
+function shockwaveSound() {
+
+    playTone(
+        55,
+        18,
+        0.7,
+        "sawtooth",
+        0.16
+    );
+
+    setTimeout(() => {
+
+        playTone(
+            180,
+            40,
+            0.55,
+            "triangle",
+            0.08
+        );
+
+    }, 70);
+}
+
+
+/* =========================================================
+   BODY CREATION
+========================================================= */
+
+function createBox(
+    x,
+    y,
+    width,
+    height,
+    health
+) {
+
+    const body = {
+
+        type: "box",
+
+        kind: "block",
+
+        x,
+        y,
+
+        width,
+        height,
+
+        vx: 0,
+
+        vy: 0,
+
+        angle: 0,
+
+        angularVelocity: 0,
+
+        mass:
+            Math.max(
+                4,
+                width *
+                height /
+                500
+            ),
+
+        invMass: 0,
+
+        health,
+
+        maxHealth:
+            health,
+
+        restitution:
+            0.18,
+
+        friction:
+            0.75,
+
+        alive: true
+    };
+
+    body.invMass =
+        1 / body.mass;
+
+    bodies.push(body);
+
+    return body;
+}
+
+
+/* =========================================================
+   FLYING ENEMIES
+========================================================= */
+
+function createEnemy(
+    x,
+    y,
+    radius = 28,
+    boss = false
+) {
+
+    const health =
+        boss
+            ? 420
+            : 110;
+
+    const speed =
+        boss
+            ? random(
+                70,
+                110
+            )
+            : random(
+                90,
+                180
+            );
+
+    const direction =
+        Math.random() *
+        Math.PI *
+        2;
+
+    const body = {
+
+        type: "circle",
+
+        kind:
+            boss
+                ? "boss"
+                : "enemy",
+
+        x,
+        y,
+
+        radius,
+
+        vx:
+            Math.cos(direction) *
+            speed,
+
+        vy:
+            Math.sin(direction) *
+            speed,
+
+        angle: 0,
+
+        angularVelocity:
+            random(
+                -2,
+                2
+            ),
+
+        mass:
+            boss
+                ? 18
+                : 4,
+
+        invMass: 0,
+
+        health,
+
+        maxHealth:
+            health,
+
+        restitution:
+            0.65,
+
+        friction:
+            0.2,
+
+        alive: true,
+
+        /* Flying AI */
+
+        flying: true,
+
+        targetDirection:
+            direction,
+
+        directionTimer:
+            random(
+                0.5,
+                2.5
+            ),
+
+        speed
+    };
+
+    body.invMass =
+        1 / body.mass;
+
+    bodies.push(body);
+
+    return body;
+}
+
+
+/* =========================================================
+   PROJECTILE
+========================================================= */
+
+function createProjectile() {
+
+    projectile = {
+
+        x:
+            sling.x,
+
+        y:
+            sling.y,
+
+        radius:
+            27,
+
+        vx: 0,
+
+        vy: 0,
+
+        launched:
+            false,
+
+        alive:
+            true,
+
+        restTimer:
+            0
+    };
+
+    shockwaveUsed =
+        false;
+}
+
+
+/* =========================================================
+   PARTICLES
+========================================================= */
+
+function createParticles(
+    x,
+    y,
+    count,
+    color,
+    speed
+) {
+
+    for (
+        let i = 0;
+        i < count;
+        i++
+    ) {
+
+        const angle =
+            Math.random() *
+            Math.PI *
+            2;
+
+        const velocity =
+            random(
+                speed * 0.25,
+                speed
+            );
+
+        particles.push({
+
+            x,
+
+            y,
+
+            vx:
+                Math.cos(angle) *
+                velocity,
+
+            vy:
+                Math.sin(angle) *
+                velocity,
+
+            size:
+                random(
+                    2,
+                    8
+                ),
+
+            life:
+                random(
+                    0.4,
+                    1.3
+                ),
+
+            maxLife:
+                1.3,
+
+            color
+        });
+    }
+}
+
+
+function updateParticles(dt) {
+
+    for (
+        let i =
+            particles.length - 1;
+
+        i >= 0;
+
+        i--
+    ) {
+
+        const p =
+            particles[i];
+
+        p.vy +=
+            450 * dt;
+
+        p.x +=
+            p.vx * dt;
+
+        p.y +=
+            p.vy * dt;
+
+        p.life -= dt;
+
+        if (
+            p.life <= 0
+        ) {
+
+            particles.splice(
+                i,
+                1
+            );
+        }
+    }
+}
+
+
+/* =========================================================
+   DAMAGE
+========================================================= */
+
+function destroyBody(body) {
+
+    if (!body.alive) return;
+
+    body.alive =
+        false;
+
+    let points =
+        100;
+
+    let color =
+        "#d69a50";
+
+    let count =
+        16;
+
+    let speed =
+        300;
+
+    if (
+        body.kind ===
+        "enemy"
+    ) {
+
+        points =
+            1000;
+
+        color =
+            "#ff4f68";
+
+        count =
+            35;
+
+        speed =
+            420;
+    }
+
+    if (
+        body.kind ===
+        "boss"
+    ) {
+
+        points =
+            5000;
+
+        color =
+            "#b167ff";
+
+        count =
+            90;
+
+        speed =
+            700;
+    }
+
+    score +=
+        points;
+
+    createParticles(
+        body.x,
+        body.y,
+        count,
+        color,
+        speed
+    );
+
+    explosionSound();
+
+    updateHUD();
+}
+
+
+function damageBody(
+    body,
+    damage
+) {
+
+    if (!body.alive) return;
+
+    if (
+        damage < 2
+    ) return;
+
+    body.health -=
+        damage;
+
+    if (
+        body.health <= 0
+    ) {
+
+        destroyBody(body);
+    }
+}
+
+
+/* =========================================================
+   PROJECTILE VS BOX
+========================================================= */
+
+function projectileBoxCollision(
+    ball,
+    box
+) {
+
+    const cos =
+        Math.cos(
+            -box.angle
+        );
+
+    const sin =
+        Math.sin(
+            -box.angle
+        );
+
+    const dx =
+        ball.x -
+        box.x;
+
+    const dy =
+        ball.y -
+        box.y;
+
+    const localX =
+        dx * cos -
+        dy * sin;
+
+    const localY =
+        dx * sin +
+        dy * cos;
+
+    const halfW =
+        box.width / 2;
+
+    const halfH =
+        box.height / 2;
+
+    const closestX =
+        clamp(
+            localX,
+            -halfW,
+            halfW
+        );
+
+    const closestY =
+        clamp(
+            localY,
+            -halfH,
+            halfH
+        );
+
+    const diffX =
+        localX -
+        closestX;
+
+    const diffY =
+        localY -
+        closestY;
+
+    const distanceSquared =
+        diffX *
+        diffX +
+        diffY *
+        diffY;
+
+    if (
+        distanceSquared >
+        ball.radius *
+        ball.radius
+    ) {
+
+        return null;
+    }
+
+    const distance =
+        Math.sqrt(
+            distanceSquared
+        ) ||
+        0.001;
+
+    let localNX =
+        diffX /
+        distance;
+
+    let localNY =
+        diffY /
+        distance;
+
+    if (
+        Math.abs(diffX) <
+        0.001 &&
+
+        Math.abs(diffY) <
+        0.001
+    ) {
+
+        if (
+            Math.abs(
+                localX /
+                halfW
+            ) >
+
+            Math.abs(
+                localY /
+                halfH
+            )
+        ) {
+
+            localNX =
+                Math.sign(
+                    localX
+                ) || 1;
+
+            localNY =
+                0;
+
+        } else {
+
+            localNX =
+                0;
+
+            localNY =
+                Math.sign(
+                    localY
+                ) || 1;
+        }
+    }
+
+    const worldNX =
+        localNX *
+        Math.cos(
+            box.angle
+        ) -
+
+        localNY *
+        Math.sin(
+            box.angle
+        );
+
+    const worldNY =
+        localNX *
+        Math.sin(
+            box.angle
+        ) +
+
+        localNY *
+        Math.cos(
+            box.angle
+        );
+
+    return {
+
+        nx:
+            worldNX,
+
+        ny:
+            worldNY
+    };
+}
+
+
+/* =========================================================
+   PROJECTILE VS CIRCLE
+========================================================= */
+
+function projectileCircleCollision(
+    ball,
+    enemy
+) {
+
+    const dx =
+        ball.x -
+        enemy.x;
+
+    const dy =
+        ball.y -
+        enemy.y;
+
+    const distance =
+        Math.hypot(
+            dx,
+            dy
+        );
+
+    const minimum =
+        ball.radius +
+        enemy.radius;
+
+    if (
+        distance >=
+        minimum
+    ) {
+
+        return null;
+    }
+
+    return {
+
+        nx:
+            dx /
+            (
+                distance ||
+                1
+            ),
+
+        ny:
+            dy /
+            (
+                distance ||
+                1
+            )
+    };
+}
+
+
+/* =========================================================
+   PROJECTILE COLLISIONS
+========================================================= */
+
+function updateProjectileCollisions() {
+
+    if (
+        !projectile ||
+        !projectile.launched ||
+        !projectile.alive
+    ) return;
+
+    for (
+        const body
+        of bodies
+    ) {
+
+        if (
+            !body.alive
+        ) continue;
+
+        let collision =
+            null;
+
+        if (
+            body.type ===
+            "box"
+        ) {
+
+            collision =
+                projectileBoxCollision(
+                    projectile,
+                    body
+                );
+
+        } else {
+
+            collision =
+                projectileCircleCollision(
+                    projectile,
+                    body
+                );
+        }
+
+        if (
+            !collision
+        ) continue;
+
+        const normalSpeed =
+            projectile.vx *
+            collision.nx +
+
+            projectile.vy *
+            collision.ny;
+
+        if (
+            normalSpeed >=
+            0
+        ) continue;
+
+        const speed =
+            Math.hypot(
+                projectile.vx,
+                projectile.vy
+            );
+
+        /* Increased impact damage */
+
+        const damage =
+            speed *
+            0.26;
+
+        damageBody(
+            body,
+            damage
+        );
+
+        projectile.vx -=
+            1.65 *
+            normalSpeed *
+            collision.nx;
+
+        projectile.vy -=
+            1.65 *
+            normalSpeed *
+            collision.ny;
+
+        projectile.vx *=
+            0.72;
+
+        projectile.vy *=
+            0.72;
+
+        body.vx -=
+            collision.nx *
+            speed *
+            body.invMass *
+            25;
+
+        body.vy -=
+            collision.ny *
+            speed *
+            body.invMass *
+            25;
+
+        body.angularVelocity +=
+            (
+                Math.random() -
+                0.5
+            ) *
+            speed *
+            0.02;
+
+        createParticles(
+            projectile.x,
+            projectile.y,
+            12,
+            "#75dfff",
+            220
+        );
+
+        hitSound();
+    }
+}
+
+
+/* =========================================================
+   FLYING ENEMY AI
+========================================================= */
+
+function updateFlyingEnemy(
+    body,
+    dt
+) {
+
+    body.directionTimer -=
+        dt;
+
+    /*
+       Every few moments
+       choose a new random direction.
+    */
+
+    if (
+        body.directionTimer <=
+        0
+    ) {
+
+        body.targetDirection =
+            Math.random() *
+            Math.PI *
+            2;
+
+        body.directionTimer =
+            random(
+                0.6,
+                2.5
+            );
+    }
+
+    const desiredVX =
+        Math.cos(
+            body.targetDirection
+        ) *
+        body.speed;
+
+    const desiredVY =
+        Math.sin(
+            body.targetDirection
+        ) *
+        body.speed;
+
+    /*
+       Smooth steering
+    */
+
+    body.vx +=
+        (
+            desiredVX -
+            body.vx
+        ) *
+        0.8 *
+        dt;
+
+    body.vy +=
+        (
+            desiredVY -
+            body.vy
+        ) *
+        0.8 *
+        dt;
+
+    /*
+       Keep enemies flying
+       inside the battlefield.
+    */
+
+    const left =
+        W * 0.45;
+
+    const right =
+        W - 30;
+
+    const top =
+        90;
+
+    const bottom =
+        groundY -
+        body.radius -
+        20;
+
+    if (
+        body.x <
+        left
+    ) {
+
+        body.x =
+            left;
+
+        body.vx =
+            Math.abs(
+                body.vx
+            );
+
+        body.targetDirection =
+            random(
+                -0.8,
+                0.8
+            );
+    }
+
+    if (
+        body.x >
+        right
+    ) {
+
+        body.x =
+            right;
+
+        body.vx =
+            -Math.abs(
+                body.vx
+            );
+
+        body.targetDirection =
+            random(
+                Math.PI - 0.8,
+                Math.PI + 0.8
+            );
+    }
+
+    if (
+        body.y <
+        top
+    ) {
+
+        body.y =
+            top;
+
+        body.vy =
+            Math.abs(
+                body.vy
+            );
+    }
+
+    if (
+        body.y >
+        bottom
+    ) {
+
+        body.y =
+            bottom;
+
+        body.vy =
+            -Math.abs(
+                body.vy
+            );
+    }
+
+    body.angle +=
+        body.angularVelocity *
+        dt;
+}
+
+
+/* =========================================================
+   BODY PHYSICS
+========================================================= */
+
+function updateBodies(dt) {
+
+    for (
+        const body
+        of bodies
+    ) {
+
+        if (
+            !body.alive
+        ) continue;
+
+        /*
+           Flying enemies do not
+           receive gravity.
+        */
+
+        if (
+            body.flying
+        ) {
+
+            updateFlyingEnemy(
+                body,
+                dt
+            );
+
+            body.x +=
+                body.vx *
+                dt;
+
+            body.y +=
+                body.vy *
+                dt;
+
+            continue;
+        }
+
+        body.vy +=
+            GRAVITY *
+            dt;
+
+        body.x +=
+            body.vx *
+            dt;
+
+        body.y +=
+            body.vy *
+            dt;
+
+        body.angle +=
+            body.angularVelocity *
+            dt;
+
+        body.vx *=
+            0.998;
+
+        body.vy *=
+            0.998;
+
+        body.angularVelocity *=
+            0.99;
+
+        let bottom;
+
+        if (
+            body.type ===
+            "circle"
+        ) {
+
+            bottom =
+                body.y +
+                body.radius;
+
+        } else {
+
+            bottom =
+                body.y +
+
+                Math.abs(
+                    Math.cos(
+                        body.angle
+                    )
+                ) *
+                body.height /
+                2 +
+
+                Math.abs(
+                    Math.sin(
+                        body.angle
+                    )
+                ) *
+                body.width /
+                2;
+        }
+
+        if (
+            bottom >
+            groundY
+        ) {
+
+            body.y -=
+                bottom -
+                groundY;
+
+            if (
+                body.vy >
+                0
+            ) {
+
+                const impact =
+                    Math.abs(
+                        body.vy
+                    );
+
+                body.vy *=
+                    -0.32;
+
+                body.vx *=
+                    0.82;
+
+                body.angularVelocity *=
+                    0.75;
+
+                damageBody(
+                    body,
+                    impact *
+                    0.025
+                );
+            }
+        }
+    }
+}
+
+
+/* =========================================================
+   PROJECTILE PHYSICS
+========================================================= */
+
+function updateProjectile(dt) {
+
+    if (
+        !projectile ||
+        !projectile.alive ||
+        !projectile.launched
+    ) return;
+
+    projectile.vy +=
+        GRAVITY *
+        dt;
+
+    projectile.x +=
+        projectile.vx *
+        dt;
+
+    projectile.y +=
+        projectile.vy *
+        dt;
+
+    projectile.vx *=
+        0.999;
+
+    projectile.vy *=
+        0.999;
+
+    if (
+        projectile.y +
+        projectile.radius >
+        groundY
+    ) {
+
+        projectile.y =
+            groundY -
+            projectile.radius;
+
+        if (
+            projectile.vy >
+            0
+        ) {
+
+            projectile.vy *=
+                -0.5;
+
+            projectile.vx *=
+                0.88;
+        }
+    }
+
+    updateProjectileCollisions();
+
+    const speed =
+        Math.hypot(
+            projectile.vx,
+            projectile.vy
+        );
+
+    if (
+        speed <
+        30
+    ) {
+
+        projectile.restTimer +=
+            dt;
+
+    } else {
+
+        projectile.restTimer =
+            0;
+    }
+
+    if (
+        projectile.restTimer >
+        1.8 ||
+
+        projectile.x >
+        W + 250 ||
+
+        projectile.x <
+        -250 ||
+
+        projectile.y >
+        H + 250
+    ) {
+
+        projectile.alive =
+            false;
+
+        finishShot();
+    }
+}
+
+
+/* =========================================================
+   MASSIVE SHOCKWAVE
+========================================================= */
+
+function activateShockwave() {
+
+    if (
+        !projectile ||
+        !projectile.launched ||
+        !projectile.alive ||
+        shockwaveUsed
+    ) return;
+
+    shockwaveUsed =
+        true;
+
+    /*
+       Visual shockwave.
+    */
+
+    shockwaves.push({
+
+        x:
+            projectile.x,
+
+        y:
+            projectile.y,
+
+        radius:
+            10,
+
+        maxRadius:
+            430,
+
+        speed:
+            900,
+
+        life:
+            0.75,
+
+        maxLife:
+            0.75
+    });
+
+    /*
+       Huge particle burst.
+    */
+
+    createParticles(
+        projectile.x,
+        projectile.y,
+        140,
+        "#65e7ff",
+        900
+    );
+
+    createParticles(
+        projectile.x,
+        projectile.y,
+        70,
+        "#ffffff",
+        550
+    );
+
+    /*
+       Screen shake.
+    */
+
+    screenShake =
+        18;
+
+    shockwaveSound();
+
+    /*
+       Large area of effect.
+    */
+
+    const radius =
+        430;
+
+    for (
+        const body
+        of bodies
+    ) {
+
+        if (
+            !body.alive
+        ) continue;
+
+        const dx =
+            body.x -
+            projectile.x;
+
+        const dy =
+            body.y -
+            projectile.y;
+
+        const distance =
+            Math.hypot(
+                dx,
+                dy
+            ) || 1;
+
+        if (
+            distance >
+            radius
+        ) continue;
+
+        const strength =
+            1 -
+            distance /
+            radius;
+
+        /*
+           Strong outward force.
+        */
+
+        const force =
+            strength *
+            4200;
+
+        body.vx +=
+            (
+                dx /
+                distance
+            ) *
+            force *
+            body.invMass;
+
+        body.vy +=
+            (
+                dy /
+                distance
+            ) *
+            force *
+            body.invMass;
+
+        body.angularVelocity +=
+            (
+                Math.random() -
+                0.5
+            ) *
+            strength *
+            35;
+
+        /*
+           Increased damage.
+        */
+
+        const damage =
+            strength *
+            (
+                body.kind ===
+                "boss"
+                    ? 260
+                    : 380
+            );
+
+        damageBody(
+            body,
+            damage
+        );
+    }
+}
+
+
+/* =========================================================
+   UPDATE SHOCKWAVES
+========================================================= */
+
+function updateShockwaves(dt) {
+
+    for (
+        let i =
+            shockwaves.length -
+            1;
+
+        i >= 0;
+
+        i--
+    ) {
+
+        const shock =
+            shockwaves[i];
+
+        shock.radius +=
+            shock.speed *
+            dt;
+
+        shock.life -=
+            dt;
+
+        if (
+            shock.radius >=
+            shock.maxRadius ||
+
+            shock.life <=
+            0
+        ) {
+
+            shockwaves.splice(
+                i,
+                1
+            );
+        }
+    }
+}
+
+
+/* =========================================================
+   LEVEL
+========================================================= */
+
+function buildLevel() {
+
+    bodies = [];
+
+    particles = [];
+
+    shockwaves = [];
+
+    score = 0;
+
+    shots = 5;
+
+    gameOver = false;
+
+    waitingForNextOrb =
+        false;
+
+    /* Defensive structures */
+
+    createBox(
+        W * 0.58,
+        groundY - 70,
+        45,
+        140,
+        140
+    );
+
+    createBox(
+        W * 0.68,
+        groundY - 70,
+        45,
+        140,
+        140
+    );
+
+    createBox(
+        W * 0.63,
+        groundY - 145,
+        180,
+        28,
+        180
+    );
+
+
+    /* Flying enemy */
+
+    createEnemy(
+        W * 0.63,
+        groundY - 260,
+        29
+    );
+
+
+    createBox(
+        W * 0.78,
+        groundY - 90,
+        48,
+        180,
+        180
+    );
+
+    createBox(
+        W * 0.90,
+        groundY - 90,
+        48,
+        180,
+        180
+    );
+
+    createBox(
+        W * 0.84,
+        groundY - 185,
+        220,
+        30,
+        210
+    );
+
+
+    /* Flying enemy */
+
+    createEnemy(
+        W * 0.84,
+        groundY - 320,
+        31
+    );
+
+
+    /* Boss */
+
+    createEnemy(
+        W * 0.94,
+        groundY - 240,
+        42,
+        true
+    );
+
+
+    createProjectile();
+
+    updateHUD();
+
+    hideOverlay();
+}
+
+
+/* =========================================================
+   HUD
+========================================================= */
+
+function updateHUD() {
+
+    scoreEl.textContent =
+        Math.floor(
+            score
+        );
+
+    shotsEl.textContent =
+        Math.max(
+            0,
+            shots
+        );
+
+    const enemies =
+        bodies.filter(
+            body =>
+
+                body.alive &&
+
+                (
+                    body.kind ===
+                    "enemy" ||
+
+                    body.kind ===
+                    "boss"
+                )
+        ).length;
+
+    enemyCountEl.textContent =
+        enemies;
+}
+
+
+/* =========================================================
+   FINISH SHOT
+========================================================= */
+
+function finishShot() {
+
+    if (
+        gameOver
+    ) return;
+
+    const enemiesAlive =
+        bodies.some(
+            body =>
+
+                body.alive &&
+
+                (
+                    body.kind ===
+                    "enemy" ||
+
+                    body.kind ===
+                    "boss"
+                )
+        );
+
+    if (
+        !enemiesAlive
+    ) return;
+
+    if (
+        shots <= 0
+    ) {
+
+        showOverlay(
+            "MISSION FAILED",
+            "Enemy drones remain active. Aim farther ahead of moving drones and use the shockwave when several enemies are nearby."
+        );
+
+        return;
+    }
+
+    waitingForNextOrb =
+        true;
+
+    setTimeout(() => {
+
+        if (
+            !gameOver
+        ) {
+
+            createProjectile();
+
+            waitingForNextOrb =
+                false;
+        }
+
+    }, 600);
+}
+
+
+/* =========================================================
+   OVERLAY
+========================================================= */
+
+function showOverlay(
+    title,
+    text
+) {
+
+    gameOver =
+        true;
+
+    panelTitle.textContent =
+        title;
+
+    panelText.textContent =
+        text;
+
+    overlay.style.display =
+        "flex";
+}
+
+
+function hideOverlay() {
+
+    overlay.style.display =
+        "none";
+}
+
+
+/* =========================================================
+   POINTER
+========================================================= */
+
+function pointerPosition(event) {
+
+    const rect =
+        canvas.getBoundingClientRect();
+
+    return {
+
+        x:
+            event.clientX -
+            rect.left,
+
+        y:
+            event.clientY -
+            rect.top
+    };
+}
+
+
+canvas.addEventListener(
+    "pointerdown",
+    event => {
+
+        enableAudio();
+
+        if (
+            gameOver ||
+
+            waitingForNextOrb ||
+
+            !projectile ||
+
+            projectile.launched
+        ) return;
+
+        const p =
+            pointerPosition(
+                event
+            );
+
+        const distance =
+            Math.hypot(
+                p.x -
+                projectile.x,
+
+                p.y -
+                projectile.y
+            );
+
+        if (
+            distance <
+            projectile.radius +
+            35
+        ) {
+
+            dragging =
+                true;
+
+            canvas.setPointerCapture(
+                event.pointerId
+            );
+        }
+    }
+);
+
+
+canvas.addEventListener(
+    "pointermove",
+    event => {
+
+        if (
+            !dragging ||
+            !projectile
+        ) return;
+
+        const p =
+            pointerPosition(
+                event
+            );
+
+        let dx =
+            p.x -
+            sling.x;
+
+        let dy =
+            p.y -
+            sling.y;
+
+        const distance =
+            Math.hypot(
+                dx,
+                dy
+            );
+
+        if (
+            distance >
+            sling.maxStretch
+        ) {
+
+            const ratio =
+                sling.maxStretch /
+                distance;
+
+            dx *=
+                ratio;
+
+            dy *=
+                ratio;
+        }
+
+        projectile.x =
+            sling.x +
+            dx;
+
+        projectile.y =
+            sling.y +
+            dy;
+    }
+);
+
+
+function releaseProjectile() {
+
+    if (
+        !dragging ||
+        !projectile
+    ) return;
+
+    dragging =
+        false;
+
+    const dx =
+        sling.x -
+        projectile.x;
+
+    const dy =
+        sling.y -
+        projectile.y;
+
+    const stretch =
+        Math.hypot(
+            dx,
+            dy
+        );
+
+    if (
+        stretch <
+        8
+    ) {
+
+        projectile.x =
+            sling.x;
+
+        projectile.y =
+            sling.y;
+
+        return;
+    }
+
+    projectile.launched =
+        true;
+
+    /*
+       Increased launch multiplier.
+    */
+
+    projectile.vx =
+        dx *
+        7.8;
+
+    projectile.vy =
+        dy *
+        7.8;
+
+    shots--;
+
+    updateHUD();
+
+    launchSound();
+}
+
+
+canvas.addEventListener(
+    "pointerup",
+    releaseProjectile
+);
+
+
+canvas.addEventListener(
+    "pointercancel",
+    releaseProjectile
+);
+
+
+/* =========================================================
+   KEYBOARD
+========================================================= */
+
+window.addEventListener(
+    "keydown",
+    event => {
+
+        if (
+            event.code ===
+            "Space"
+        ) {
+
+            event.preventDefault();
+
+            enableAudio();
+
+            activateShockwave();
+        }
+
+        if (
+            event.key
+                .toLowerCase() ===
+            "r"
+        ) {
+
+            buildLevel();
+        }
+    }
+);
+
+
+restartButton.addEventListener(
+    "click",
+    buildLevel
+);
+
+
+/* =========================================================
+   UPDATE
+========================================================= */
+
+function update(dt) {
+
+    if (
+        gameOver
+    ) {
+
+        updateParticles(dt);
+
+        updateShockwaves(dt);
+
+        return;
+    }
+
+    updateBodies(dt);
+
+    updateProjectile(dt);
+
+    updateParticles(dt);
+
+    updateShockwaves(dt);
+
+    screenShake *=
+        0.88;
+
+    const enemiesAlive =
+        bodies.some(
+            body =>
+
+                body.alive &&
+
+                (
+                    body.kind ===
+                    "enemy" ||
+
+                    body.kind ===
+                    "boss"
+                )
+        );
+
+    updateHUD();
+
+    if (
+        !enemiesAlive &&
+        !gameOver
+    ) {
+
+        score +=
+            shots *
+            500;
+
+        updateHUD();
+
+        showOverlay(
+            "GALAXY SECURED",
+            "All enemy drones have been eliminated. Unused plasma orbs were converted into bonus score."
+        );
+    }
+}
+
+
+/* =========================================================
+   BACKGROUND
+========================================================= */
+
+function drawBackground(time) {
+
+    const sky =
+        ctx.createLinearGradient(
+            0,
+            0,
+            0,
+            H
+        );
+
+    sky.addColorStop(
+        0,
+        "#091a3c"
+    );
+
+    sky.addColorStop(
+        0.6,
+        "#07101f"
+    );
+
+    sky.addColorStop(
+        1,
+        "#02050c"
+    );
+
+    ctx.fillStyle =
+        sky;
+
+    ctx.fillRect(
+        0,
+        0,
+        W,
+        H
+    );
+
+
+    /* Stars */
+
+    for (
+        const star
+        of stars
+    ) {
+
+        ctx.globalAlpha =
+            star.alpha *
+
+            (
+                0.6 +
+
+                Math.sin(
+                    time *
+                    0.002 +
+
+                    star.phase
+                ) *
+                0.4
+            );
+
+        ctx.fillStyle =
+            "#d9ecff";
+
+        ctx.beginPath();
+
+        ctx.arc(
+            star.x,
+            star.y,
+            star.size,
+            0,
+            Math.PI *
+            2
+        );
+
+        ctx.fill();
+    }
+
+    ctx.globalAlpha =
+        1;
+
+
+    /* Planet */
+
+    const planetX =
+        W * 0.8;
+
+    const planetY =
+        H * 0.18;
+
+    const planetR =
+        Math.min(
+            W,
+            H
+        ) *
+        0.12;
+
+    const planet =
+        ctx.createRadialGradient(
+
+            planetX -
+            planetR *
+            0.35,
+
+            planetY -
+            planetR *
+            0.35,
+
+            2,
+
+            planetX,
+            planetY,
+
+            planetR
+        );
+
+    planet.addColorStop(
+        0,
+        "#8eb8e8"
+    );
+
+    planet.addColorStop(
+        0.6,
+        "#304e85"
+    );
+
+    planet.addColorStop(
+        1,
+        "#111a35"
+    );
+
+    ctx.fillStyle =
+        planet;
+
+    ctx.beginPath();
+
+    ctx.arc(
+        planetX,
+        planetY,
+        planetR,
+        0,
+        Math.PI *
+        2
+    );
+
+    ctx.fill();
+
+
+    /* Ground */
+
+    const ground =
+        ctx.createLinearGradient(
+            0,
+            groundY,
+            0,
+            H
+        );
+
+    ground.addColorStop(
+        0,
+        "#294757"
+    );
+
+    ground.addColorStop(
+        1,
+        "#050a10"
+    );
+
+    ctx.fillStyle =
+        ground;
+
+    ctx.fillRect(
+        0,
+        groundY,
+        W,
+        H -
+        groundY
+    );
+
+    ctx.strokeStyle =
+        "rgba(110,200,255,0.5)";
+
+    ctx.lineWidth =
+        2;
+
+    ctx.beginPath();
+
+    ctx.moveTo(
+        0,
+        groundY
+    );
+
+    ctx.lineTo(
+        W,
+        groundY
+    );
+
+    ctx.stroke();
+}
+
+
+/* =========================================================
+   BLOCK DRAWING
+========================================================= */
+
+function drawBlock(body) {
+
+    ctx.save();
+
+    ctx.translate(
+        body.x,
+        body.y
+    );
+
+    ctx.rotate(
+        body.angle
+    );
+
+    const gradient =
+        ctx.createLinearGradient(
+
+            -body.width /
+            2,
+
+            -body.height /
+            2,
+
+            body.width /
+            2,
+
+            body.height /
+            2
+        );
+
+    gradient.addColorStop(
+        0,
+        "#e0b271"
+    );
+
+    gradient.addColorStop(
+        0.55,
+        "#9a6333"
+    );
+
+    gradient.addColorStop(
+        1,
+        "#512d15"
+    );
+
+    ctx.fillStyle =
+        gradient;
+
+    ctx.fillRect(
+
+        -body.width /
+        2,
+
+        -body.height /
+        2,
+
+        body.width,
+
+        body.height
+    );
+
+    ctx.strokeStyle =
+        "#f2c783";
+
+    ctx.lineWidth =
+        2;
+
+    ctx.strokeRect(
+
+        -body.width /
+        2,
+
+        -body.height /
+        2,
+
+        body.width,
+
+        body.height
+    );
+
+    ctx.restore();
+}
+
+
+/* =========================================================
+   ENEMY DRAWING
+========================================================= */
+
+function drawEnemy(
+    body,
+    time
+) {
+
+    ctx.save();
+
+    ctx.translate(
+        body.x,
+        body.y
+    );
+
+    ctx.rotate(
+        body.angle
+    );
+
+    const glowColor =
+        body.kind ===
+        "boss"
+
+            ? "#b469ff"
+
+            : "#ff5167";
+
+
+    /*
+       Thruster flames.
+    */
+
+    ctx.save();
+
+    ctx.rotate(
+        Math.atan2(
+            body.vy,
+            body.vx
+        )
+    );
+
+    ctx.fillStyle =
+        "rgba(80,210,255,0.55)";
+
+    ctx.beginPath();
+
+    ctx.moveTo(
+        -body.radius,
+        -body.radius *
+        0.35
+    );
+
+    ctx.lineTo(
+        -body.radius *
+        1.8,
+
+        0
+    );
+
+    ctx.lineTo(
+        -body.radius,
+
+        body.radius *
+        0.35
+    );
+
+    ctx.fill();
+
+    ctx.restore();
+
+
+    ctx.shadowBlur =
+        body.kind ===
+        "boss"
+
+            ? 30
+
+            : 18;
+
+    ctx.shadowColor =
+        glowColor;
+
+
+    const gradient =
+        ctx.createRadialGradient(
+
+            -body.radius *
+            0.3,
+
+            -body.radius *
+            0.3,
+
+            3,
+
+            0,
+            0,
+
+            body.radius
+        );
+
+    gradient.addColorStop(
+        0,
+        "#ffd9df"
+    );
+
+    gradient.addColorStop(
+        0.38,
+        glowColor
+    );
+
+    gradient.addColorStop(
+        1,
+
+        body.kind ===
+        "boss"
+
+            ? "#311a5c"
+
+            : "#4c111d"
+    );
+
+    ctx.fillStyle =
+        gradient;
+
+    ctx.beginPath();
+
+    ctx.arc(
+        0,
+        0,
+        body.radius,
+        0,
+        Math.PI *
+        2
+    );
+
+    ctx.fill();
+
+    ctx.shadowBlur =
+        0;
+
+
+    /* Visor */
+
+    ctx.fillStyle =
+        "#07111f";
+
+    ctx.fillRect(
+
+        -body.radius *
+        0.68,
+
+        -body.radius *
+        0.22,
+
+        body.radius *
+        1.36,
+
+        body.radius *
+        0.44
+    );
+
+
+    /* Eyes */
+
+    const eyeGlow =
+        0.65 +
+
+        Math.sin(
+            time *
+            0.008 +
+
+            body.x
+        ) *
+        0.35;
+
+    ctx.shadowBlur =
+        14;
+
+    ctx.shadowColor =
+        "#ffec64";
+
+    ctx.fillStyle =
+        `rgba(255,235,90,${eyeGlow})`;
+
+    ctx.beginPath();
+
+    ctx.arc(
+
+        -body.radius *
+        0.25,
+
+        0,
+
+        body.radius *
+        0.11,
+
+        0,
+
+        Math.PI *
+        2
+    );
+
+    ctx.fill();
+
+    ctx.beginPath();
+
+    ctx.arc(
+
+        body.radius *
+        0.25,
+
+        0,
+
+        body.radius *
+        0.11,
+
+        0,
+
+        Math.PI *
+        2
+    );
+
+    ctx.fill();
+
+    ctx.shadowBlur =
+        0;
+
+
+    /* Health bar */
+
+    const ratio =
+        Math.max(
+            0,
+
+            body.health /
+            body.maxHealth
+        );
+
+    ctx.fillStyle =
+        "rgba(0,0,0,0.7)";
+
+    ctx.fillRect(
+
+        -body.radius,
+
+        -body.radius -
+        20,
+
+        body.radius *
+        2,
+
+        6
+    );
+
+    ctx.fillStyle =
+        body.kind ===
+        "boss"
+
+            ? "#b86dff"
+
+            : "#ff5369";
+
+    ctx.fillRect(
+
+        -body.radius,
+
+        -body.radius -
+        20,
+
+        body.radius *
+        2 *
+        ratio,
+
+        6
+    );
+
+    ctx.restore();
+}
+
+
+/* =========================================================
+   DRAW BODIES
+========================================================= */
+
+function drawBodies(time) {
+
+    for (
+        const body
+        of bodies
+    ) {
+
+        if (
+            !body.alive
+        ) continue;
+
+        if (
+            body.kind ===
+            "block"
+        ) {
+
+            drawBlock(
+                body
+            );
+
+        } else {
+
+            drawEnemy(
+                body,
+                time
+            );
+        }
+    }
+}
+
+
+/* =========================================================
+   SLINGSHOT
+========================================================= */
+
+function drawSlingshot() {
+
+    ctx.lineCap =
+        "round";
+
+
+    ctx.strokeStyle =
+        "#3e2417";
+
+    ctx.lineWidth =
+        22;
+
+    ctx.beginPath();
+
+    ctx.moveTo(
+        sling.x,
+        groundY -
+        10
+    );
+
+    ctx.lineTo(
+        sling.x,
+        sling.y -
+        45
+    );
+
+    ctx.stroke();
+
+
+    ctx.strokeStyle =
+        "#a96235";
+
+    ctx.lineWidth =
+        13;
+
+    ctx.beginPath();
+
+    ctx.moveTo(
+        sling.x,
+        groundY -
+        10
+    );
+
+    ctx.lineTo(
+        sling.x,
+        sling.y -
+        45
+    );
+
+    ctx.stroke();
+
+
+    if (
+
+        projectile &&
+
+        !projectile.launched &&
+
+        projectile.alive
+
+    ) {
+
+        ctx.strokeStyle =
+            "#a9dfff";
+
+        ctx.lineWidth =
+            4;
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            sling.x,
+            sling.y -
+            30
+        );
+
+        ctx.lineTo(
+            projectile.x,
+            projectile.y
+        );
+
+        ctx.lineTo(
+            sling.x,
+            sling.y +
+            22
+        );
+
+        ctx.stroke();
+    }
+}
+
+
+/* =========================================================
+   TRAJECTORY
+========================================================= */
+
+function drawTrajectory() {
+
+    if (
+        !dragging ||
+        !projectile
+    ) return;
+
+    let x =
+        projectile.x;
+
+    let y =
+        projectile.y;
+
+    let vx =
+        (
+            sling.x -
+            x
+        ) *
+        7.8;
+
+    let vy =
+        (
+            sling.y -
+            y
+        ) *
+        7.8;
+
+    ctx.fillStyle =
+        "rgba(130,220,255,0.75)";
+
+    for (
+        let i = 0;
+        i < 90;
+        i++
+    ) {
+
+        const dt =
+            0.03;
+
+        vy +=
+            GRAVITY *
+            dt;
+
+        x +=
+            vx *
+            dt;
+
+        y +=
+            vy *
+            dt;
+
+        if (
+            i % 3 ===
+            0
+        ) {
+
+            ctx.beginPath();
+
+            ctx.arc(
+                x,
+                y,
+                2.2,
+                0,
+                Math.PI *
+                2
+            );
+
+            ctx.fill();
+        }
+
+        if (
+            y >
+            groundY
+        ) break;
+    }
+}
+
+
+/* =========================================================
+   PROJECTILE
+========================================================= */
+
+function drawProjectile(time) {
+
+    if (
+        !projectile ||
+        !projectile.alive
+    ) return;
+
+    const pulse =
+        1 +
+
+        Math.sin(
+            time *
+            0.01
+        ) *
+        0.08;
+
+    ctx.save();
+
+    ctx.shadowBlur =
+        38 *
+        pulse;
+
+    ctx.shadowColor =
+        "#55dfff";
+
+    const gradient =
+        ctx.createRadialGradient(
+
+            projectile.x -
+            9,
+
+            projectile.y -
+            9,
+
+            2,
+
+            projectile.x,
+
+            projectile.y,
+
+            projectile.radius
+        );
+
+    gradient.addColorStop(
+        0,
+        "#ffffff"
+    );
+
+    gradient.addColorStop(
+        0.28,
+        "#baf5ff"
+    );
+
+    gradient.addColorStop(
+        0.62,
+        "#38bfff"
+    );
+
+    gradient.addColorStop(
+        1,
+        "#1246b8"
+    );
+
+    ctx.fillStyle =
+        gradient;
+
+    ctx.beginPath();
+
+    ctx.arc(
+
+        projectile.x,
+
+        projectile.y,
+
+        projectile.radius *
+        pulse,
+
+        0,
+
+        Math.PI *
+        2
+    );
+
+    ctx.fill();
+
+    ctx.restore();
+
+
+    /* Trail */
+
+    if (
+        projectile.launched
+    ) {
+
+        ctx.strokeStyle =
+            "rgba(65,205,255,0.4)";
+
+        ctx.lineWidth =
+            10;
+
+        ctx.lineCap =
+            "round";
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            projectile.x,
+            projectile.y
+        );
+
+        ctx.lineTo(
+
+            projectile.x -
+
+            projectile.vx *
+            0.06,
+
+            projectile.y -
+
+            projectile.vy *
+            0.06
+        );
+
+        ctx.stroke();
+    }
+}
+
+
+/* =========================================================
+   SHOCKWAVE DRAWING
+========================================================= */
+
+function drawShockwaves() {
+
+    for (
+        const shock
+        of shockwaves
+    ) {
+
+        const alpha =
+            clamp(
+
+                shock.life /
+                shock.maxLife,
+
+                0,
+                1
+            );
+
+        ctx.save();
+
+        ctx.globalAlpha =
+            alpha;
+
+
+        /* Outer glow */
+
+        ctx.shadowBlur =
+            30;
+
+        ctx.shadowColor =
+            "#55eaff";
+
+        ctx.strokeStyle =
+            "#6feaff";
+
+        ctx.lineWidth =
+            12 *
+            alpha;
+
+        ctx.beginPath();
+
+        ctx.arc(
+
+            shock.x,
+
+            shock.y,
+
+            shock.radius,
+
+            0,
+
+            Math.PI *
+            2
+        );
+
+        ctx.stroke();
+
+
+        /* Inner ring */
+
+        ctx.strokeStyle =
+            "rgba(255,255,255,0.8)";
+
+        ctx.lineWidth =
+            4 *
+            alpha;
+
+        ctx.beginPath();
+
+        ctx.arc(
+
+            shock.x,
+
+            shock.y,
+
+            shock.radius *
+            0.72,
+
+            0,
+
+            Math.PI *
+            2
+        );
+
+        ctx.stroke();
+
+
+        ctx.restore();
+    }
+}
+
+
+/* =========================================================
+   PARTICLES DRAWING
+========================================================= */
+
+function drawParticles() {
+
+    for (
+        const p
+        of particles
+    ) {
+
+        const alpha =
+            clamp(
+
+                p.life /
+                p.maxLife,
+
+                0,
+                1
+            );
+
+        ctx.globalAlpha =
+            alpha;
+
+        ctx.fillStyle =
+            p.color;
+
+        ctx.beginPath();
+
+        ctx.arc(
+
+            p.x,
+
+            p.y,
+
+            p.size *
+            alpha,
+
+            0,
+
+            Math.PI *
+            2
+        );
+
+        ctx.fill();
+    }
+
+    ctx.globalAlpha =
+        1;
+}
+
+
+/* =========================================================
+   RENDER
+========================================================= */
+
+function render(time) {
+
+    let shakeX =
+        0;
+
+    let shakeY =
+        0;
+
+    if (
+        screenShake >
+        0.3
+    ) {
+
+        shakeX =
+            random(
+                -screenShake,
+                screenShake
+            );
+
+        shakeY =
+            random(
+                -screenShake,
+                screenShake
+            );
+    }
+
+    ctx.save();
+
+    ctx.translate(
+        shakeX,
+        shakeY
+    );
+
+    drawBackground(
+        time
+    );
+
+    drawBodies(
+        time
+    );
+
+    drawSlingshot();
+
+    drawTrajectory();
+
+    drawProjectile(
+        time
+    );
+
+    drawShockwaves();
+
+    drawParticles();
+
+    ctx.restore();
+}
+
+
+/* =========================================================
+   GAME LOOP
+========================================================= */
+
+function gameLoop(time) {
+
+    if (
+        !lastTime
+    ) {
+
+        lastTime =
+            time;
+    }
+
+    let delta =
+        (
+            time -
+            lastTime
+        ) /
+        1000;
+
+    lastTime =
+        time;
+
+    delta =
+        Math.min(
+            delta,
+            0.05
+        );
+
+    accumulator +=
+        delta;
+
+    let steps =
+        0;
+
+    while (
+
+        accumulator >=
+        FIXED_STEP &&
+
+        steps <
+        MAX_STEPS
+
+    ) {
+
+        update(
+            FIXED_STEP
+        );
+
+        accumulator -=
+            FIXED_STEP;
+
+        steps++;
+    }
+
+    render(
+        time
+    );
+
+    requestAnimationFrame(
+        gameLoop
+    );
+}
+
+
+/* =========================================================
+   START
+========================================================= */
+
+buildLevel();
+
+requestAnimationFrame(
+    gameLoop
+);
+
+</script>
+
+</body>
+</html>
+```
